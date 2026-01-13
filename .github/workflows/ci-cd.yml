@@ -1,0 +1,127 @@
+name: CI/CD Pipeline
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+env:
+  NODE_VERSION: 20.x
+  IMAGE_NAME: ${{ secrets.IMAGE_NAME }}
+  REGISTRY: ${{ secrets.REGISTRY }}
+  SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+  SONAR_PROJECT_KEY: ${{ secrets.SONAR_PROJECT_KEY }}
+  SONAR_ORG: ${{ secrets.SONAR_ORG }}
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. Checkout
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Setup Node
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      # 3. Install deps
+      - name: Install dependencies
+        run: npm ci
+
+      # 4. Security scan
+      - name: Run Snyk SAST
+        if: github.event.pull_request.base.ref == 'main'
+        uses: snyk/actions/node@master
+        with:
+          args: test
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+      # 5. SonarQube
+      - name: SonarQube Scan
+        if: github.event.pull_request.base.ref == 'main'
+        uses: sonarsource/sonarqube-scan-action@v2.0.1
+        with:
+          args: >
+            -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
+            -Dsonar.organization=${{ secrets.SONAR_ORG }}
+            -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }}
+            -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+
+      # 6. Unit & integration tests
+      - name: Run unit/integration tests
+        run: npm run test:cov
+
+      # 7. E2E tests (Playwright)
+      - name: Build and start app
+        run: npm run build && npm run start &
+      - name: Run e2e tests
+        run: npm run test:e2e
+
+  docker-build-push:
+    runs-on: ubuntu-latest
+    needs: build-test
+    if: github.event.pull_request.base.ref == 'main' || github.event.pull_request.base.ref == 'develop'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:pr-${{ github.event.pull_request.number }}
+            ${{ env.IMAGE_NAME }}:${{ github.event.pull_request.base.ref }}
+          cache-from: type=registry,ref=${{ env.IMAGE_NAME }}:cache
+          cache-to: type=registry,ref=${{ env.IMAGE_NAME }}:cache,mode=max
+
+  deploy-k3s:
+    runs-on: ubuntu-latest
+    needs: docker-build-push
+    if: github.event.pull_request.base.ref == 'main'
+    env:
+      DEPLOYMENT_NAME: my-app
+      CONTAINER_NAME: my-app
+      NAMESPACE: ${{ github.event.pull_request.base.ref == 'main' && 'prod' || 'staging' }}
+
+    steps:
+      - name: Deploy to k3s
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_IP }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            # Mise à jour de l’image
+            k3s kubectl set image deployment/${{ env.DEPLOYMENT_NAME }} \
+              ${{ env.CONTAINER_NAME }}=${{ env.IMAGE_NAME }}:${{ github.event.pull_request.base.ref }} \
+              -n ${{ env.NAMESPACE }}
+
+            # Restart du déploiement
+            k3s kubectl rollout restart deployment/${{ env.DEPLOYMENT_NAME }} -n ${{ env.NAMESPACE }}
+
+            # Attente que le déploiement soit OK
+            echo "Waiting for deployment to complete..."
+            k3s kubectl rollout status deployment/${{ env.DEPLOYMENT_NAME }} -n ${{ env.NAMESPACE }} --timeout=180s
+
+            # Vérification rapide
+            echo "Deployment status:"
+            k3s kubectl get deployment/${{ env.DEPLOYMENT_NAME }} -n ${{ env.NAMESPACE }} -o wide
