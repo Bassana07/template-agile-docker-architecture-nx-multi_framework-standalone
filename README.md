@@ -1,4 +1,4 @@
-# template-agile-docker-architecture-nx-mfe
+# template-agile-docker-architecture-nx-multi-frameworkstandalone
 
 # My Company - Monorepo Frontend
 
