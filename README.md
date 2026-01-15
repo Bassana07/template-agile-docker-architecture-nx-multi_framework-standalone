@@ -35,20 +35,7 @@ docker-compose --version  # 2.x.x
 
 ---
 
-## 🚀 Installation
-
-### 1. Cloner le repository
-```bash
-git clone https://github.com/my-company/monorepo-frontend.git
-cd monorepo-frontend
-```
-
-### 2. Installer les dépendances
-```bash
-npm install
-```
-
-### 3. Configuration des variables d'environnement
+### Configuration des variables d'environnement
 
 Créer les fichiers `.env` pour chaque environnement :
 ```bash
