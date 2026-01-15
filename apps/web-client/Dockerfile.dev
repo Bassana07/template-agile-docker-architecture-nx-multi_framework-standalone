@@ -1,0 +1,29 @@
+# apps/web-client/Dockerfile.dev
+
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Installer les dépendances système nécessaires
+RUN apk add --no-cache git
+
+# Copier les fichiers de config du monorepo
+COPY package*.json ./
+COPY nx.json ./
+COPY tsconfig.base.json ./
+
+# Installer TOUTES les dépendances (dev incluses)
+RUN npm ci
+
+# Copier tout le code source
+COPY . .
+
+# Exposer le port
+EXPOSE 3000
+
+# Variables d'environnement dev
+ENV NODE_ENV=development
+ENV PORT=3000
+
+# Hot reload avec Nx
+CMD ["npx", "nx", "serve", "web-client", "--host=0.0.0.0"]

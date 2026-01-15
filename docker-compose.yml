@@ -1,0 +1,62 @@
+# docker-compose.yml
+
+services:
+  # ==========================================
+  # DEVELOPMENT PROFILE
+  # ==========================================
+  
+  web-client-dev:
+    build:
+      context: .
+      dockerfile: apps/web-client/Dockerfile.dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/dist
+    environment:
+      - NODE_ENV=development
+    depends_on:
+    networks:
+      - app-network
+    profiles: ["dev"]
+
+  # ==========================================
+  # PRODUCTION PROFILE
+  # ==========================================
+  
+  web-client-prod:
+    build:
+      context: .
+      dockerfile: apps/web-client-shell/Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+    depends_on:
+    networks:
+      - app-network
+    restart: unless-stopped
+    profiles: ["prod"]
+
+  # ==========================================
+  # NGINX (Partagé entre dev et prod)
+  # ==========================================
+  
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - app-network
+    profiles: ["dev", "prod"]
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  node_modules:
