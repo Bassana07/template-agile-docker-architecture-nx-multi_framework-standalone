@@ -17,7 +17,8 @@
     "paths": {
       "@libs-shared-ui": ["apps/libs/shared/ui/src/index.ts"],
       "@libs-shared-utils": ["apps/libs/shared/utils/src/index.ts"],
-      "@libs-shared-api-client": ["apps/libs/shared/api-client/src/index.ts"]
+      "@libs-shared-api-client": ["apps/libs/shared/api-client/src/index.ts"],
+      "@libs-shared-types": ["apps/libs/shared/types/src/index.ts"]
     }
   },
   "exclude": ["node_modules", "tmp"]
