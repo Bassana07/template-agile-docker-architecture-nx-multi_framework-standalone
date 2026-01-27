@@ -61,7 +61,7 @@
     "vitest": "^4.0.8"
   },
   "dependencies": {
-    "next": "~16.0.1",
+    "next": "~16.1.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   }
